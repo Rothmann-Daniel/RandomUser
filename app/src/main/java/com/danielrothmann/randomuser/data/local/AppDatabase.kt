@@ -14,3 +14,5 @@ import com.danielrothmann.randomuser.data.local.entity.UserEntity
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
 }
+
+// init dev
