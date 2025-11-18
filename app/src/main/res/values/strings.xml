@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">RandomUser</string>
+    <string name="generate_user">Generate user</string>
+    <string name="select_gender">Select Gender:</string>
+    <string name="select_nationality">Select Nationality:</string>
+    <string name="generate">GENERATE</string>
+    <string name="loading">Loading…</string>
+
+</resources>
