@@ -40,8 +40,8 @@ val appModule = module {
     factory { DeleteUserUseCase(get()) }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
-    viewModel { ListUsersViewModel(get(), get()) } // Убрали лишний параметр
+    viewModel { MainViewModel(get(), get(), get()) }
+    viewModel { ListUsersViewModel(get(), get(), get(), get()) }
     viewModel { (uuid: String) -> DetailsViewModel(uuid, get()) }
 }
 

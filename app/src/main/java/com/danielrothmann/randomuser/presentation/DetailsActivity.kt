@@ -52,6 +52,7 @@ class DetailsActivity : AppCompatActivity() {
         })
     }
 
+
     private fun setupObservers() {
         lifecycleScope.launchWhenStarted {
             viewModel.isLoading.collectLatest { isLoading ->

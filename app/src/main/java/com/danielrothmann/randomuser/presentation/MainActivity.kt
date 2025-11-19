@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.danielrothmann.randomuser.databinding.ActivityMainBinding
 import com.danielrothmann.randomuser.domain.model.Resource
@@ -74,20 +75,25 @@ class MainActivity : AppCompatActivity() {
             viewModel.isLoading.collectLatest { isLoading ->
                 binding.btnGenerateUser.isEnabled = !isLoading
                 binding.btnGenerateUser.text = if (isLoading) "Generating..." else "Generate"
-                // Здесь можно добавить ProgressBar если нужно
             }
         }
 
         lifecycleScope.launchWhenStarted {
-            viewModel.usersState.collectLatest { resource ->
+            viewModel.hasUsers.collectLatest { hasUsers ->
+                binding.btnViewList.isVisible = hasUsers
+            }
+        }
+
+        lifecycleScope.launchWhenStarted {
+            viewModel.generatedUserState.collectLatest { resource ->
                 when (resource) {
                     is Resource.Success -> {
-                        if (resource.data.isNotEmpty()) {
-                            // Переходим к списку пользователей
-                            val intent = Intent(this@MainActivity, ListUsersActivity::class.java)
+                        resource.data?.let { user ->
+                            // Переходим к деталям сгенерированного пользователя
+                            val intent = Intent(this@MainActivity, DetailsActivity::class.java).apply {
+                                putExtra("USER_UUID", user.uuid)
+                            }
                             startActivity(intent)
-                        } else {
-                            Snackbar.make(binding.root, "No users found", Snackbar.LENGTH_SHORT).show()
                         }
                     }
                     is Resource.Error -> {
@@ -106,7 +112,12 @@ class MainActivity : AppCompatActivity() {
             val gender = getSelectedGender()
             val nationality = getSelectedNationality()
 
-            viewModel.generateUsers(gender, nationality)
+            viewModel.generateSingleUser(gender, nationality)
+        }
+
+        binding.btnViewList.setOnClickListener {
+            val intent = Intent(this, ListUsersActivity::class.java)
+            startActivity(intent)
         }
     }
 

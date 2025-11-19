@@ -4,35 +4,52 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danielrothmann.randomuser.domain.model.Resource
 import com.danielrothmann.randomuser.domain.model.User
+import com.danielrothmann.randomuser.domain.usecase.GetCachedUsersUseCase
 import com.danielrothmann.randomuser.domain.usecase.GetRandomUsersUseCase
 import com.danielrothmann.randomuser.domain.usecase.SaveUserUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class MainViewModel(
     private val getRandomUsersUseCase: GetRandomUsersUseCase,
-    private val saveUserUseCase: SaveUserUseCase
+    private val saveUserUseCase: SaveUserUseCase,
+    private val getCachedUsersUseCase: GetCachedUsersUseCase
 ) : ViewModel() {
 
-    private val _usersState = MutableStateFlow<Resource<List<User>>>(Resource.Loading)
-    val usersState: StateFlow<Resource<List<User>>> = _usersState
+    private val _generatedUserState = MutableStateFlow<Resource<User?>>(Resource.Loading)
+    val generatedUserState: StateFlow<Resource<User?>> = _generatedUserState
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    fun generateUsers(gender: String?, nationality: String?) {
+    val hasUsers = getCachedUsersUseCase()
+        .map { it.isNotEmpty() }
+
+    fun generateSingleUser(gender: String?, nationality: String?) {
         viewModelScope.launch {
             _isLoading.value = true
-            _usersState.value = Resource.Loading
+            _generatedUserState.value = Resource.Loading
 
-            val result = getRandomUsersUseCase(10, gender, nationality)
-            _usersState.value = result
+            val result = getRandomUsersUseCase(1, gender, nationality)
 
-            // Сохраняем успешно полученных пользователей
-            if (result is Resource.Success) {
-                result.data.forEach { user ->
-                    saveUserUseCase(user)
+            when (result) {
+                is Resource.Success -> {
+                    if (result.data.isNotEmpty()) {
+                        val user = result.data.first()
+                        // Сохраняем пользователя в базу данных
+                        saveUserUseCase(user)
+                        _generatedUserState.value = Resource.Success(user)
+                    } else {
+                        _generatedUserState.value = Resource.Error("No user generated")
+                    }
+                }
+                is Resource.Error -> {
+                    _generatedUserState.value = Resource.Error(result.message)
+                }
+                is Resource.Loading -> {
+                    // Уже обрабатывается
                 }
             }
 

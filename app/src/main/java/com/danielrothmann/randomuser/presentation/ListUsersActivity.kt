@@ -7,10 +7,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.danielrothmann.randomuser.databinding.ActivityListUsersBinding
+import com.danielrothmann.randomuser.domain.model.Resource
+import com.danielrothmann.randomuser.presentation.adapters.UsersAdapter
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
-import com.danielrothmann.randomuser.presentation.adapters.UsersAdapter
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class ListUsersActivity : AppCompatActivity() {
@@ -24,9 +26,21 @@ class ListUsersActivity : AppCompatActivity() {
         binding = ActivityListUsersBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupToolbar()
         setupRecyclerView()
         setupObservers()
         setupClickListeners()
+    }
+
+    private fun setupToolbar() {
+        setSupportActionBar(findViewById(com.danielrothmann.randomuser.R.id.toolbar))
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.setDisplayShowHomeEnabled(true)
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        onBackPressed()
+        return true
     }
 
     private fun setupRecyclerView() {
@@ -52,20 +66,45 @@ class ListUsersActivity : AppCompatActivity() {
         lifecycleScope.launchWhenStarted {
             viewModel.users.collectLatest { users ->
                 adapter.submitList(users)
-
-                // Показываем пустое состояние если нет пользователей
                 binding.recyclerView.isVisible = users.isNotEmpty()
                 // Здесь можно добавить TextView для пустого состояния
                 // binding.emptyState.isVisible = users.isEmpty()
+            }
+        }
+
+        lifecycleScope.launchWhenStarted {
+            viewModel.isLoading.collectLatest { isLoading ->
+                binding.btnAddUser.isEnabled = !isLoading
+                // Можно добавить ProgressBar на кнопку
+            }
+        }
+
+        lifecycleScope.launchWhenStarted {
+            viewModel.generatedUserState.collectLatest { resource ->
+                when (resource) {
+                    is Resource.Success -> {
+                        resource.data?.let { user ->
+                            // Переходим к деталям сгенерированного пользователя
+                            val intent = Intent(this@ListUsersActivity, DetailsActivity::class.java).apply {
+                                putExtra("USER_UUID", user.uuid)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                    is Resource.Error -> {
+                        Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
+                    }
+                    is Resource.Loading -> {
+                        // Loading state
+                    }
+                }
             }
         }
     }
 
     private fun setupClickListeners() {
         binding.btnAddUser.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            startActivity(intent)
+            viewModel.generateAndSaveUser()
         }
     }
 }

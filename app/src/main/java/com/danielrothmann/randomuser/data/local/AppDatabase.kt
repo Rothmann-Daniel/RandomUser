@@ -15,4 +15,3 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun userDao(): UserDao
 }
 
-// init dev
