@@ -3,40 +3,25 @@ package com.danielrothmann.randomuser.presentation
 import android.content.Intent
 import android.os.Bundle
 import android.widget.ArrayAdapter
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.danielrothmann.randomuser.R
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.danielrothmann.randomuser.databinding.ActivityMainBinding
 import com.danielrothmann.randomuser.domain.model.Resource
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : AppCompatActivity() {
+
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModel()
 
     private val nationalities = listOf(
-        "AU" to "Australian",
-        "BR" to "Brazilian",
-        "CA" to "Canadian",
-        "CH" to "Swiss",
-        "DE" to "German",
-        "DK" to "Danish",
-        "ES" to "Spanish",
-        "FI" to "Finnish",
-        "FR" to "French",
-        "GB" to "British",
-        "IE" to "Irish",
-        "IN" to "Indian",
-        "IR" to "Iranian",
-        "MX" to "Mexican",
-        "NL" to "Dutch",
-        "NO" to "Norwegian",
-        "NZ" to "New Zealander",
-        "RS" to "Serbian",
-        "TR" to "Turkish",
-        "UA" to "Ukrainian",
-        "US" to "American"
+        "AU", "BR", "CA", "CH", "DE", "DK", "ES", "FI", "FR", "GB", "IE", "IN", "IR", "MX", "NL", "NO", "NZ", "RS", "TR", "UA", "US"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,84 +29,104 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        setupToolbar()
-        setupGenderDropdown()
-        setupNationalityDropdown()
+        setupDropdowns()
         setupObservers()
         setupClickListeners()
     }
 
-    private fun setupToolbar() {
-        binding.appBarLayout.setNavigationOnClickListener {
-            finish()
+    private fun setupDropdowns() {
+        // Gender dropdown
+        val genders = resources.getStringArray(com.danielrothmann.randomuser.R.array.gender_array)
+        val genderAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, genders)
+        binding.dropdownSelectGender.setAdapter(genderAdapter)
+
+        // Nationality dropdown
+        val nationalityNames = nationalities.map { getNationalityName(it) }
+        val nationalityAdapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, nationalityNames)
+        binding.dropdownSelectNationality.setAdapter(nationalityAdapter)
+    }
+
+    private fun getNationalityName(code: String): String {
+        return when (code) {
+            "AU" -> "Australia"
+            "BR" -> "Brazil"
+            "CA" -> "Canada"
+            "CH" -> "Switzerland"
+            "DE" -> "Germany"
+            "DK" -> "Denmark"
+            "ES" -> "Spain"
+            "FI" -> "Finland"
+            "FR" -> "France"
+            "GB" -> "United Kingdom"
+            "IE" -> "Ireland"
+            "IN" -> "India"
+            "IR" -> "Iran"
+            "MX" -> "Mexico"
+            "NL" -> "Netherlands"
+            "NO" -> "Norway"
+            "NZ" -> "New Zealand"
+            "RS" -> "Serbia"
+            "TR" -> "Turkey"
+            "UA" -> "Ukraine"
+            "US" -> "United States"
+            else -> code
         }
-    }
-
-    private fun setupGenderDropdown() {
-        val genders = listOf("Select gender", "Male", "Female")
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, genders)
-        binding.dropdownSelectGender.setAdapter(adapter)
-    }
-
-    private fun setupNationalityDropdown() {
-        val nationalityNames = listOf("Select nationality (optional)") + nationalities.map { it.second }
-        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, nationalityNames)
-        binding.dropdownSelectNationality.setAdapter(adapter)
     }
 
     private fun setupObservers() {
-        viewModel.usersState.observe(this) { resource ->
-            when (resource) {
-                is Resource.Loading -> {
-                    binding.btnGenerateUser.isEnabled = false
-                    binding.btnGenerateUser.text = "Loading..."
-                }
-                is Resource.Success -> {
-                    binding.btnGenerateUser.isEnabled = true
-                    binding.btnGenerateUser.text = getString(R.string.generate)
-
-                    val user = resource.data.firstOrNull()
-                    if (user != null) {
-                        val intent = Intent(this, DetailsActivity::class.java).apply {
-                            putExtra("USER", user)
-                        }
-                        startActivity(intent)
-                    } else {
-                        Toast.makeText(this, "No user data received", Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Состояние загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.btnGenerateUser.isEnabled = !isLoading
+                        binding.btnGenerateUser.text = if (isLoading) "Generating..." else "Generate"
                     }
                 }
-                is Resource.Error -> {
-                    binding.btnGenerateUser.isEnabled = true
-                    binding.btnGenerateUser.text = getString(R.string.generate)
-                    showErrorDialog(resource.message)
+
+                // Наличие пользователей
+                launch {
+                    viewModel.hasUsers.collectLatest { hasUsers ->
+                        binding.btnViewList.isVisible = hasUsers
+                    }
+                }
+
+                // Состояние генерации пользователя
+                launch {
+                    viewModel.generatedUserState.collectLatest { resource ->
+                        when (resource) {
+                            is Resource.Success -> {
+                                resource.data?.let { user ->
+                                    val intent = Intent(this@MainActivity, DetailsActivity::class.java).apply {
+                                        putExtra("USER_UUID", user.uuid)
+                                    }
+                                    viewModel.clearGeneratedUserState()
+                                    startActivity(intent)
+                                }
+                            }
+                            is Resource.Error -> {
+                                Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
+                                viewModel.clearGeneratedUserState()
+                            }
+                            is Resource.Loading -> {
+                                // Loading state уже обрабатывается в isLoading flow
+                            }
+                            null -> {
+                                // Состояние сброшено
+                            }
+                        }
+                    }
                 }
             }
-        }
-
-        viewModel.errorMessage.observe(this) { message ->
-            // Дополнительные сообщения об ошибках
         }
     }
 
     private fun setupClickListeners() {
         binding.btnGenerateUser.setOnClickListener {
-            val gender = binding.dropdownSelectGender.text.toString()
-            val nationality = binding.dropdownSelectNationality.text.toString()
+            val gender = getSelectedGender()
+            val nationality = getSelectedNationality()
 
-            val genderParam = when {
-                gender == "Male" -> "male"
-                gender == "Female" -> "female"
-                else -> null
-            }
-
-            // Не передаем nationality если выбран default или пусто
-            val nationalityParam = when {
-                nationality.isEmpty() ||
-                        nationality == "Select nationality (optional)" -> null
-                else -> nationalities.find { it.second == nationality }?.first
-            }
-
-            viewModel.generateUser(genderParam, nationalityParam)
+            viewModel.generateSingleUser(gender, nationality)
         }
 
         binding.btnViewList.setOnClickListener {
@@ -130,20 +135,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showErrorDialog(message: String) {
-        AlertDialog.Builder(this)
-            .setTitle("Error")
-            .setMessage(message)
-            .setPositiveButton("Retry") { _, _ ->
-                // Повторить последний запрос
-                binding.btnGenerateUser.performClick()
-            }
-            .setNegativeButton("Cancel", null)
-            .setNeutralButton("Try without nationality") { _, _ ->
-                // Очистить выбор национальности и попробовать снова
-                binding.dropdownSelectNationality.setText("", false)
-                binding.btnGenerateUser.performClick()
-            }
-            .show()
+    private fun getSelectedGender(): String? {
+        val selectedGender = binding.dropdownSelectGender.text.toString()
+        return when (selectedGender) {
+            "Male" -> "male"
+            "Female" -> "female"
+            else -> null
+        }
+    }
+
+    private fun getSelectedNationality(): String? {
+        val selectedNationality = binding.dropdownSelectNationality.text.toString()
+        return nationalities.find { code -> getNationalityName(code) == selectedNationality }
     }
 }

@@ -1,13 +1,12 @@
 package com.danielrothmann.randomuser.di
 
+import android.content.Context
 import androidx.room.Room
 import com.danielrothmann.randomuser.data.local.AppDatabase
 import com.danielrothmann.randomuser.data.remote.api.RandomUserApi
 import com.danielrothmann.randomuser.data.repository.UserRepositoryImpl
 import com.danielrothmann.randomuser.domain.repository.UserRepository
-import com.danielrothmann.randomuser.domain.usecase.GetCachedUsersUseCase
-import com.danielrothmann.randomuser.domain.usecase.GetRandomUsersUseCase
-import com.danielrothmann.randomuser.domain.usecase.GetUserByIdUseCase
+import com.danielrothmann.randomuser.domain.usecase.*
 import com.danielrothmann.randomuser.presentation.DetailsViewModel
 import com.danielrothmann.randomuser.presentation.ListUsersViewModel
 import com.danielrothmann.randomuser.presentation.MainViewModel
@@ -21,55 +20,60 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 val appModule = module {
-
     // Database
-    single {
-        Room.databaseBuilder(
-            androidContext(),
-            AppDatabase::class.java,
-            "random_user_db"
-        ).build()
-    }
-
+    single { provideDatabase(androidContext()) }
     single { get<AppDatabase>().userDao() }
 
     // Network
-    single {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
-        OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
-    }
-
-    single {
-        Retrofit.Builder()
-            .baseUrl("https://randomuser.me/")
-            .client(get())
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-    }
-
-    single {
-        get<Retrofit>().create(RandomUserApi::class.java)
-    }
+    single { provideOkHttpClient() }
+    single { provideRetrofit(get()) }
+    single { provideRandomUserApi(get()) }
 
     // Repository
-    single<UserRepository> {
-        UserRepositoryImpl(get(), get())
-    }
+    single<UserRepository> { UserRepositoryImpl(get(), get()) }
 
     // Use Cases
     factory { GetRandomUsersUseCase(get()) }
     factory { GetCachedUsersUseCase(get()) }
     factory { GetUserByIdUseCase(get()) }
+    factory { SaveUserUseCase(get()) }
+    factory { DeleteUserUseCase(get()) }
 
     // ViewModels
-    viewModel { MainViewModel(get(), get()) }
-    viewModel { ListUsersViewModel(get(), get()) }
-    viewModel { (userId: String) -> DetailsViewModel(userId, get()) }
+    viewModel { MainViewModel(get(), get(), get()) }
+    viewModel { ListUsersViewModel(get(), get(), get(), get()) }
+    viewModel { (uuid: String) -> DetailsViewModel(uuid, get()) }
+}
+
+private fun provideDatabase(context: Context): AppDatabase {
+    return Room.databaseBuilder(
+        context,
+        AppDatabase::class.java,
+        "random_user.db"
+    ).build()
+}
+
+private fun provideOkHttpClient(): OkHttpClient {
+    val loggingInterceptor = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+    }
+
+    return OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .build()
+}
+
+private fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    return Retrofit.Builder()
+        .baseUrl("https://randomuser.me/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+}
+
+private fun provideRandomUserApi(retrofit: Retrofit): RandomUserApi {
+    return retrofit.create(RandomUserApi::class.java)
 }

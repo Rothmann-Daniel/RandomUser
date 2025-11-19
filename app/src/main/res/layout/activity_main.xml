@@ -137,6 +137,7 @@
         android:layout_marginBottom="16dp"
         android:text="View Saved Users"
         android:textSize="16sp"
+        android:visibility="gone"
         app:cornerRadius="10dp"
         app:layout_constraintBottom_toTopOf="@id/btn_generateUser"
         app:layout_constraintEnd_toEndOf="parent"

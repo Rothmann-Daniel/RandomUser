@@ -1,131 +1,161 @@
 package com.danielrothmann.randomuser.presentation
 
-import android.os.Build
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
-import android.view.View
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
-import com.bumptech.glide.Glide
-import com.danielrothmann.randomuser.R
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import coil.load
 import com.danielrothmann.randomuser.databinding.ActivityDetailsBinding
-import com.danielrothmann.randomuser.domain.model.User
 import com.google.android.material.tabs.TabLayout
+import kotlinx.coroutines.flow.collectLatest
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.parameter.parametersOf
 
 class DetailsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDetailsBinding
-    private var currentUser: User? = null
+    private val viewModel: DetailsViewModel by viewModel {
+        parametersOf(intent.getStringExtra("USER_UUID") ?: "")
+    }
+
+    private var isNewUser = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityDetailsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        currentUser = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra("USER", User::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra("USER")
-        }
+        // Проверяем, является ли это новым пользователем
+        isNewUser = intent.getBooleanExtra("IS_NEW_USER", false)
+        Log.d("DetailsActivity", "onCreate: isNewUser = $isNewUser")
 
         setupToolbar()
         setupTabs()
-        currentUser?.let { displayUserData(it) }
+        setupObservers()
     }
 
     private fun setupToolbar() {
-        binding.toolbar.setNavigationOnClickListener {
-            finish()
+        binding.toolbar.apply {
+            setNavigationOnClickListener {
+                Log.d("DetailsActivity", "Back button clicked")
+                handleBackNavigation()
+            }
+            title = ""
+            subtitle = ""
         }
+
+        binding.collapsingToolbar.title = ""
+        binding.collapsingToolbar.isTitleEnabled = false
+    }
+
+    private fun handleBackNavigation() {
+        if (isNewUser) {
+            // Если это новый пользователь, отправляем результат
+            Log.d("DetailsActivity", "Setting result for new user")
+            setResult(Activity.RESULT_OK, Intent().apply {
+                putExtra("USER_ADDED", true)
+            })
+        }
+        finish()
     }
 
     private fun setupTabs() {
         binding.tabLayout.apply {
-            addTab(newTab().setText("Profile").setIcon(R.drawable.ic_person))
-            addTab(newTab().setText("Call").setIcon(R.drawable.ic_phone_white))
-            addTab(newTab().setText("Email").setIcon(R.drawable.ic_email_white))
-            addTab(newTab().setText("Location").setIcon(R.drawable.ic_location))
+            addTab(newTab().setText("Profile").setIcon(com.danielrothmann.randomuser.R.drawable.ic_person))
+            addTab(newTab().setText("Call").setIcon(com.danielrothmann.randomuser.R.drawable.ic_phone_white))
+            addTab(newTab().setText("Email").setIcon(com.danielrothmann.randomuser.R.drawable.ic_email_white))
+            addTab(newTab().setText("Location").setIcon(com.danielrothmann.randomuser.R.drawable.ic_location))
         }
 
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab?) {
-                when (tab?.position) {
-                    0 -> showProfileContent()
-                    1 -> showCallContent()
-                    2 -> showEmailContent()
-                    3 -> showLocationContent()
-                }
+                updateTabContent(tab?.position ?: 0)
             }
-
             override fun onTabUnselected(tab: TabLayout.Tab?) {}
             override fun onTabReselected(tab: TabLayout.Tab?) {}
         })
     }
 
-    private fun displayUserData(user: User) {
-        binding.apply {
-            tvName.text = user.fullName
+    private fun setupObservers() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Наблюдаем за состоянием загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.progressBar.isVisible = isLoading
+                        binding.nestedScrollView.isVisible = !isLoading
+                        binding.tvError.isVisible = false
+                    }
+                }
 
-            Glide.with(this@DetailsActivity)
-                .load(user.pictureUrl)
-                .placeholder(R.drawable.placeholder)
-                .into(ivAvatar)
+                // Наблюдаем за данными пользователя
+                launch {
+                    viewModel.userState.collectLatest { user ->
+                        user?.let {
+                            displayUserData(it)
+                            binding.nestedScrollView.isVisible = true
+                            binding.tvError.isVisible = false
+                        }
+                    }
+                }
 
-            // Profile tab
-            val nameParts = user.fullName.split(" ")
-            tvFirstName.text = "First name: ${nameParts.getOrNull(1) ?: ""}"
-            tvLastName.text = "Last name: ${nameParts.lastOrNull() ?: ""}"
-            tvGender.text = "Gender: ${user.gender}"
-            tvAge.text = "Age: ${user.age}"
-            tvDob.text = "Date of birth: ${user.registeredDate.substringBefore("T")}"
-
-            // Call tab
-            tvPhone.text = user.phone
-            tvCell.text = user.cell
-
-            // Email tab
-            tvEmail.text = user.email
-
-            // Location tab
-            tvAddress.text = "${user.address}\n${user.city}, ${user.state}\n${user.country}"
-            tvCoordinates.text = "Lat: ${user.coordinates.latitude}, Lng: ${user.coordinates.longitude}"
+                // Наблюдаем за ошибками
+                launch {
+                    viewModel.errorState.collectLatest { error ->
+                        error?.let {
+                            binding.tvError.isVisible = true
+                            binding.tvError.text = error
+                            binding.nestedScrollView.isVisible = false
+                            binding.progressBar.isVisible = false
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private fun showProfileContent() {
-        binding.apply {
-            contentProfile.visibility = View.VISIBLE
-            contentCall.visibility = View.GONE
-            contentEmail.visibility = View.GONE
-            contentLocation.visibility = View.GONE
+    private fun displayUserData(user: com.danielrothmann.randomuser.domain.model.User) {
+        binding.ivAvatar.load(user.pictureUrl) {
+            crossfade(true)
+            placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
+        }
+
+        binding.tvName.text = user.fullName
+
+        val nameParts = user.fullName.split(" ")
+        binding.tvFirstName.text = "First name: ${nameParts.getOrNull(1) ?: ""}"
+        binding.tvLastName.text = "Last name: ${nameParts.lastOrNull() ?: ""}"
+        binding.tvGender.text = "Gender: ${user.gender}"
+        binding.tvAge.text = "Age: ${user.age}"
+        binding.tvDob.text = "Date of birth: ${formatDate(user.registeredDate)}"
+
+        binding.tvPhone.text = user.phone
+        binding.tvCell.text = user.cell
+
+        binding.tvEmail.text = user.email
+
+        binding.tvAddress.text = "${user.address}\n${user.city}, ${user.state} ${user.postcode}\n${user.country}"
+        binding.tvCoordinates.text = "Lat: ${user.coordinates.latitude}, Lng: ${user.coordinates.longitude}"
+    }
+
+    private fun formatDate(dateString: String): String {
+        return try {
+            dateString.substring(0, 10)
+        } catch (e: Exception) {
+            dateString
         }
     }
 
-    private fun showCallContent() {
-        binding.apply {
-            contentProfile.visibility = View.GONE
-            contentCall.visibility = View.VISIBLE
-            contentEmail.visibility = View.GONE
-            contentLocation.visibility = View.GONE
-        }
-    }
-
-    private fun showEmailContent() {
-        binding.apply {
-            contentProfile.visibility = View.GONE
-            contentCall.visibility = View.GONE
-            contentEmail.visibility = View.VISIBLE
-            contentLocation.visibility = View.GONE
-        }
-    }
-
-    private fun showLocationContent() {
-        binding.apply {
-            contentProfile.visibility = View.GONE
-            contentCall.visibility = View.GONE
-            contentEmail.visibility = View.GONE
-            contentLocation.visibility = View.VISIBLE
-        }
+    private fun updateTabContent(position: Int) {
+        binding.contentProfile.isVisible = position == 0
+        binding.contentCall.isVisible = position == 1
+        binding.contentEmail.isVisible = position == 2
+        binding.contentLocation.isVisible = position == 3
     }
 }

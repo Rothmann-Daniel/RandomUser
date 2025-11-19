@@ -1,11 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white">
+    android:background="@color/white"
+    android:clipChildren="false">
 
     <!-- Header с градиентом -->
     <com.google.android.material.appbar.AppBarLayout
@@ -14,16 +14,19 @@
         android:layout_height="wrap_content"
         android:background="@android:color/transparent"
         android:theme="@style/ThemeOverlay.Material3.Dark"
-        android:elevation="0dp">
+        android:elevation="0dp"
+        android:clipChildren="false">
 
         <com.google.android.material.appbar.CollapsingToolbarLayout
             android:id="@+id/collapsing_toolbar"
             android:layout_width="match_parent"
-            android:layout_height="280dp"
+            android:layout_height="180dp"
             app:layout_scrollFlags="scroll|exitUntilCollapsed"
             app:contentScrim="@color/text_primary"
+            app:titleEnabled="false"
             app:expandedTitleTextAppearance="@style/ExpandedTitleStyle"
-            app:collapsedTitleTextAppearance="@style/CollapsedTitleStyle">
+            app:collapsedTitleTextAppearance="@style/CollapsedTitleStyle"
+            android:clipChildren="false">
 
             <!-- Фоновое изображение -->
             <ImageView
@@ -46,38 +49,39 @@
                 android:layout_height="?attr/actionBarSize"
                 app:layout_collapseMode="pin"
                 app:navigationIcon="@drawable/ic_arrow_back_white"
-                app:title="User Details" />
+                app:title=""/>
 
         </com.google.android.material.appbar.CollapsingToolbarLayout>
 
     </com.google.android.material.appbar.AppBarLayout>
 
-    <!-- Аватар поверх хедера -->
-    <com.google.android.material.card.MaterialCardView
-        android:id="@+id/card_avatar"
-        android:layout_width="120dp"
-        android:layout_height="120dp"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="220dp"
-        app:cardCornerRadius="60dp"
-        app:cardElevation="8dp"
-        app:strokeWidth="4dp"
-        app:strokeColor="@android:color/white">
+    <!-- Progress Bar -->
+    <com.google.android.material.progressindicator.CircularProgressIndicator
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
 
-        <ImageView
-            android:id="@+id/iv_avatar"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            tools:src="@tools:sample/avatars" />
-
-    </com.google.android.material.card.MaterialCardView>
+    <!-- TextView для ошибки -->
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:padding="16dp"
+        android:textColor="@color/accent"
+        android:textSize="16sp"
+        android:visibility="gone"
+        tools:text="User not found" />
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/nestedScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:clipToPadding="false"
+        android:clipChildren="false"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
         <LinearLayout
@@ -85,7 +89,27 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center_horizontal"
-            android:paddingTop="60dp">
+            android:clipChildren="false">
+
+            <!-- Аватар -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_avatar"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_marginTop="-60dp"
+                app:cardCornerRadius="60dp"
+                app:cardElevation="8dp"
+                app:strokeWidth="4dp"
+                app:strokeColor="@android:color/white">
+
+                <ImageView
+                    android:id="@+id/iv_avatar"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    tools:src="@tools:sample/avatars" />
+
+            </com.google.android.material.card.MaterialCardView>
 
             <!-- Информация пользователя -->
             <LinearLayout

@@ -1,19 +1,20 @@
-package com.danielrothmann.randomuser.presentation
+package com.danielrothmann.randomuser.presentation.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
-import com.danielrothmann.randomuser.R
+import coil.load
+import com.danielrothmann.randomuser.databinding.DialogDeleteConfirmationBinding
 import com.danielrothmann.randomuser.databinding.ItemListUsersBinding
 import com.danielrothmann.randomuser.domain.model.User
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class UsersAdapter(
-    private val onItemClick: (User) -> Unit,
-    private val onMoreClick: (User) -> Unit
-) : ListAdapter<User, UsersAdapter.UserViewHolder>(UserDiffCallback()) {
+    private val onUserClick: (User) -> Unit,
+    private val onUserDelete: (User) -> Unit
+) : ListAdapter<User, UsersAdapter.UserViewHolder>(UserDiffCallback) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val binding = ItemListUsersBinding.inflate(
@@ -21,50 +22,96 @@ class UsersAdapter(
             parent,
             false
         )
-        return UserViewHolder(binding)
+        return UserViewHolder(binding, onUserClick, onUserDelete)
     }
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val user = getItem(position)
+        holder.bind(user)
     }
 
-    inner class UserViewHolder(
-        private val binding: ItemListUsersBinding
+    class UserViewHolder(
+        private val binding: ItemListUsersBinding,
+        private val onUserClick: (User) -> Unit,
+        private val onUserDelete: (User) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(user: User) {
-            binding.apply {
-                tvUserItemFirstName.text = user.fullName.split(" ").getOrNull(1) ?: ""
-                tvUserItemLastName.text = user.fullName.split(" ").lastOrNull() ?: ""
-                tvPhone.text = user.phone
-                tvCountry.text = user.country
+        private var currentUser: User? = null
 
-                Glide.with(itemView.context)
-                    .load(user.pictureUrl)
-                    .placeholder(R.drawable.placeholder)
-                    .into(imageUserItem)
-
-                // Загрузка флага страны (опционально)
-                val countryCode = user.nationality.lowercase()
-                val flagUrl = "https://flagcdn.com/w80/$countryCode.png"
-
-                Glide.with(itemView.context)
-                    .load(flagUrl)
-                    .placeholder(R.drawable.placeholder)
-                    .into(imageCountry)
-
-                root.setOnClickListener {
-                    onItemClick(user)
+        init {
+            binding.root.setOnClickListener {
+                currentUser?.let { user ->
+                    onUserClick(user)
                 }
+            }
 
-                imageMore.setOnClickListener {
-                    onMoreClick(user)
+            binding.imageMore.setOnClickListener {
+                currentUser?.let { user ->
+                    showDeleteBottomSheetDialog(user)
                 }
             }
         }
+
+        fun bind(user: User) {
+            currentUser = user
+
+            binding.imageUserItem.load(user.pictureUrl) {
+                crossfade(true)
+                placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
+            }
+
+            val nameParts = user.fullName.split(" ")
+            binding.tvUserItemFirstName.text = nameParts.getOrNull(1) ?: ""
+            binding.tvUserItemLastName.text = nameParts.lastOrNull() ?: ""
+            binding.tvPhone.text = user.phone
+            binding.tvCountry.text = user.country
+
+            // Загрузка флага страны
+            binding.imageCountry.load("https://flagcdn.com/w320/${user.nationality.toLowerCase()}.png") {
+                crossfade(true)
+                placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
+            }
+        }
+
+        private fun showDeleteBottomSheetDialog(user: User) {
+            val context = binding.root.context
+            val dialog = BottomSheetDialog(context)
+            val dialogBinding = DialogDeleteConfirmationBinding.inflate(LayoutInflater.from(context))
+
+            dialogBinding.tvDeleteMessage.text = "Are you sure you want to delete ${user.fullName}? This action cannot be undone."
+
+            dialogBinding.btnCancel.setOnClickListener {
+                dialog.dismiss()
+            }
+
+            dialogBinding.btnDelete.setOnClickListener {
+                onUserDelete(user)
+                dialog.dismiss()
+            }
+
+            dialog.setContentView(dialogBinding.root)
+            dialog.show()
+        }
+
+        // Альтернативный метод с обычным AlertDialog (оставляем на выбор)
+        private fun showDeleteConfirmationDialog(user: User) {
+            val context = binding.root.context
+            android.app.AlertDialog.Builder(context)
+                .setTitle("Delete User")
+                .setMessage("Are you sure you want to delete ${user.fullName}?")
+                .setPositiveButton("Delete") { dialog, which ->
+                    onUserDelete(user)
+                }
+                .setNegativeButton("Cancel") { dialog, which ->
+                    dialog.dismiss()
+                }
+                .setIcon(com.danielrothmann.randomuser.R.drawable.ic_warning)
+                .create()
+                .show()
+        }
     }
 
-    class UserDiffCallback : DiffUtil.ItemCallback<User>() {
+    object UserDiffCallback : DiffUtil.ItemCallback<User>() {
         override fun areItemsTheSame(oldItem: User, newItem: User): Boolean {
             return oldItem.uuid == newItem.uuid
         }

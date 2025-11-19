@@ -2,12 +2,18 @@ package com.danielrothmann.randomuser.presentation
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.danielrothmann.randomuser.R
 import com.danielrothmann.randomuser.databinding.ActivityListUsersBinding
+import com.danielrothmann.randomuser.domain.model.Resource
+import com.danielrothmann.randomuser.presentation.adapters.UsersAdapter
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class ListUsersActivity : AppCompatActivity() {
@@ -16,26 +22,42 @@ class ListUsersActivity : AppCompatActivity() {
     private val viewModel: ListUsersViewModel by viewModel()
     private lateinit var adapter: UsersAdapter
 
+    private var deletedUser: com.danielrothmann.randomuser.domain.model.User? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityListUsersBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        setupToolbar()
         setupRecyclerView()
         setupObservers()
         setupClickListeners()
     }
 
+    private fun setupToolbar() {
+        setSupportActionBar(findViewById(com.danielrothmann.randomuser.R.id.toolbar))
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.setDisplayShowHomeEnabled(true)
+    }
+
+    override fun onSupportNavigateUp(): Boolean {
+        onBackPressedDispatcher.onBackPressed()
+        return true
+    }
+
     private fun setupRecyclerView() {
         adapter = UsersAdapter(
-            onItemClick = { user ->
+            onUserClick = { user ->
                 val intent = Intent(this, DetailsActivity::class.java).apply {
-                    putExtra("USER", user)
+                    putExtra("USER_UUID", user.uuid)
                 }
                 startActivity(intent)
             },
-            onMoreClick = { user ->
-                showDeleteDialog(user)
+            onUserDelete = { user ->
+                deletedUser = user
+                viewModel.deleteUser(user)
+                showUndoSnackbar()
             }
         )
 
@@ -45,27 +67,69 @@ class ListUsersActivity : AppCompatActivity() {
         }
     }
 
+    private fun showUndoSnackbar() {
+        deletedUser?.let { user ->
+            Snackbar.make(binding.root, "User ${user.fullName} deleted", Snackbar.LENGTH_LONG)
+                .setAction("Undo") {
+                    deletedUser?.let {
+                        viewModel.restoreUser(it)
+                    }
+                }
+                .show()
+        }
+    }
+
     private fun setupObservers() {
-        viewModel.users.observe(this) { users ->
-            adapter.submitList(users)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Список пользователей
+                launch {
+                    viewModel.users.collectLatest { users ->
+                        adapter.submitList(users)
+                        binding.recyclerView.isVisible = users.isNotEmpty()
+                    }
+                }
+
+                // Состояние загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.btnAddUser.isEnabled = !isLoading
+                    }
+                }
+
+                // Состояние генерации пользователя
+                launch {
+                    viewModel.generatedUserState.collectLatest { resource ->
+                        when (resource) {
+                            is Resource.Success -> {
+                                resource.data?.let { user ->
+                                    val intent = Intent(this@ListUsersActivity, DetailsActivity::class.java).apply {
+                                        putExtra("USER_UUID", user.uuid)
+                                    }
+                                    viewModel.clearGeneratedUserState()
+                                    startActivity(intent)
+                                }
+                            }
+                            is Resource.Error -> {
+                                Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
+                                viewModel.clearGeneratedUserState()
+                            }
+                            is Resource.Loading -> {
+                                // Loading state
+                            }
+                            null -> {
+                                // Состояние сброшено
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
     private fun setupClickListeners() {
         binding.btnAddUser.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
+            viewModel.generateAndSaveUser()
         }
-    }
-
-    private fun showDeleteDialog(user: com.danielrothmann.randomuser.domain.model.User) {
-        AlertDialog.Builder(this)
-            .setTitle("Delete User")
-            .setMessage("Are you sure you want to delete ${user.fullName}?")
-            .setPositiveButton("Delete") { _, _ ->
-                viewModel.deleteUser(user)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 }
