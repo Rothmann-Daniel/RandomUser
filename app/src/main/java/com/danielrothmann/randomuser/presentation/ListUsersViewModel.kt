@@ -39,6 +39,12 @@ class ListUsersViewModel(
         }
     }
 
+    fun restoreUser(user: User) {
+        viewModelScope.launch {
+            saveUserUseCase(user)
+        }
+    }
+
     fun generateAndSaveUser() {
         viewModelScope.launch {
             _isLoading.value = true

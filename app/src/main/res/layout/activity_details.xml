@@ -45,8 +45,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
                 app:layout_collapseMode="pin"
-                app:navigationIcon="@drawable/ic_arrow_back_white"
-                app:title="User Details" />
+                app:navigationIcon="@drawable/ic_arrow_back_white" />
 
         </com.google.android.material.appbar.CollapsingToolbarLayout>
 
@@ -73,7 +72,7 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Progress Bar - перемещаем на верхний уровень -->
+    <!-- Progress Bar -->
     <com.google.android.material.progressindicator.CircularProgressIndicator
         android:id="@+id/progressBar"
         android:layout_width="wrap_content"
@@ -81,7 +80,7 @@
         android:layout_gravity="center"
         android:visibility="gone" />
 
-    <!-- TextView для ошибки - перемещаем на верхний уровень -->
+    <!-- TextView для ошибки -->
     <TextView
         android:id="@+id/tvError"
         android:layout_width="match_parent"

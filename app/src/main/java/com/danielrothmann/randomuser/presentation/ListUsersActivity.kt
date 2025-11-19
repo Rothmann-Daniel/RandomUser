@@ -2,7 +2,6 @@ package com.danielrothmann.randomuser.presentation
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -20,6 +19,8 @@ class ListUsersActivity : AppCompatActivity() {
     private lateinit var binding: ActivityListUsersBinding
     private val viewModel: ListUsersViewModel by viewModel()
     private lateinit var adapter: UsersAdapter
+
+    private var deletedUser: com.danielrothmann.randomuser.domain.model.User? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,13 +53,27 @@ class ListUsersActivity : AppCompatActivity() {
                 startActivity(intent)
             },
             onUserDelete = { user ->
+                deletedUser = user
                 viewModel.deleteUser(user)
+                showUndoSnackbar()
             }
         )
 
         binding.recyclerView.apply {
             layoutManager = LinearLayoutManager(this@ListUsersActivity)
             adapter = this@ListUsersActivity.adapter
+        }
+    }
+
+    private fun showUndoSnackbar() {
+        deletedUser?.let { user ->
+            Snackbar.make(binding.root, "User ${user.fullName} deleted", Snackbar.LENGTH_LONG)
+                .setAction("Undo") {
+                    deletedUser?.let {
+                        viewModel.restoreUser(it)
+                    }
+                }
+                .show()
         }
     }
 

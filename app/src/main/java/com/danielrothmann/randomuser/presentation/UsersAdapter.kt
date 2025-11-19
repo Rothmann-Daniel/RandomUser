@@ -1,4 +1,3 @@
-// presentation/adapters/UsersAdapter.kt
 package com.danielrothmann.randomuser.presentation.adapters
 
 import android.view.LayoutInflater
@@ -7,8 +6,10 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.danielrothmann.randomuser.databinding.DialogDeleteConfirmationBinding
 import com.danielrothmann.randomuser.databinding.ItemListUsersBinding
 import com.danielrothmann.randomuser.domain.model.User
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class UsersAdapter(
     private val onUserClick: (User) -> Unit,
@@ -21,7 +22,7 @@ class UsersAdapter(
             parent,
             false
         )
-        return UserViewHolder(binding)
+        return UserViewHolder(binding, onUserClick, onUserDelete)
     }
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
@@ -29,35 +30,84 @@ class UsersAdapter(
         holder.bind(user)
     }
 
-    inner class UserViewHolder(
-        private val binding: ItemListUsersBinding
+    class UserViewHolder(
+        private val binding: ItemListUsersBinding,
+        private val onUserClick: (User) -> Unit,
+        private val onUserDelete: (User) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
+
+        private var currentUser: User? = null
 
         init {
             binding.root.setOnClickListener {
-                val user = getItem(adapterPosition)
-                onUserClick(user)
+                currentUser?.let { user ->
+                    onUserClick(user)
+                }
             }
 
             binding.imageMore.setOnClickListener {
-                val user = getItem(adapterPosition)
-                onUserDelete(user)
+                currentUser?.let { user ->
+                    showDeleteBottomSheetDialog(user)
+                }
             }
         }
 
         fun bind(user: User) {
+            currentUser = user
+
             binding.imageUserItem.load(user.pictureUrl) {
                 crossfade(true)
                 placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
             }
 
-            binding.tvUserItemFirstName.text = user.fullName.split(" ").getOrNull(1) ?: ""
-            binding.tvUserItemLastName.text = user.fullName.split(" ").lastOrNull() ?: ""
+            val nameParts = user.fullName.split(" ")
+            binding.tvUserItemFirstName.text = nameParts.getOrNull(1) ?: ""
+            binding.tvUserItemLastName.text = nameParts.lastOrNull() ?: ""
             binding.tvPhone.text = user.phone
             binding.tvCountry.text = user.country
 
-            // Загрузка флага страны можно реализовать через другую библиотеку
-             binding.imageCountry.load("https://flagcdn.com/w320/${user.nationality.toLowerCase()}.png")
+            // Загрузка флага страны
+            binding.imageCountry.load("https://flagcdn.com/w320/${user.nationality.toLowerCase()}.png") {
+                crossfade(true)
+                placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
+            }
+        }
+
+        private fun showDeleteBottomSheetDialog(user: User) {
+            val context = binding.root.context
+            val dialog = BottomSheetDialog(context)
+            val dialogBinding = DialogDeleteConfirmationBinding.inflate(LayoutInflater.from(context))
+
+            dialogBinding.tvDeleteMessage.text = "Are you sure you want to delete ${user.fullName}? This action cannot be undone."
+
+            dialogBinding.btnCancel.setOnClickListener {
+                dialog.dismiss()
+            }
+
+            dialogBinding.btnDelete.setOnClickListener {
+                onUserDelete(user)
+                dialog.dismiss()
+            }
+
+            dialog.setContentView(dialogBinding.root)
+            dialog.show()
+        }
+
+        // Альтернативный метод с обычным AlertDialog (оставляем на выбор)
+        private fun showDeleteConfirmationDialog(user: User) {
+            val context = binding.root.context
+            android.app.AlertDialog.Builder(context)
+                .setTitle("Delete User")
+                .setMessage("Are you sure you want to delete ${user.fullName}?")
+                .setPositiveButton("Delete") { dialog, which ->
+                    onUserDelete(user)
+                }
+                .setNegativeButton("Cancel") { dialog, which ->
+                    dialog.dismiss()
+                }
+                .setIcon(com.danielrothmann.randomuser.R.drawable.ic_warning)
+                .create()
+                .show()
         }
     }
 
