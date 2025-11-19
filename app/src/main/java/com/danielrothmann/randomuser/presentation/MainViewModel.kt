@@ -18,14 +18,20 @@ class MainViewModel(
     private val getCachedUsersUseCase: GetCachedUsersUseCase
 ) : ViewModel() {
 
-    private val _generatedUserState = MutableStateFlow<Resource<User?>>(Resource.Loading)
-    val generatedUserState: StateFlow<Resource<User?>> = _generatedUserState
+    // Изменил тип на nullable для возможности сброса
+    private val _generatedUserState = MutableStateFlow<Resource<User?>?>(null)
+    val generatedUserState: StateFlow<Resource<User?>?> = _generatedUserState
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
     val hasUsers = getCachedUsersUseCase()
         .map { it.isNotEmpty() }
+
+    // Сброс состояния генерации пользователя
+    fun clearGeneratedUserState() {
+        _generatedUserState.value = null
+    }
 
     fun generateSingleUser(gender: String?, nationality: String?) {
         viewModelScope.launch {

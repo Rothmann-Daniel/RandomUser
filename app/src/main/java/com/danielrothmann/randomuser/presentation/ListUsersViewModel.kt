@@ -30,8 +30,9 @@ class ListUsersViewModel(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val _generatedUserState = MutableStateFlow<Resource<User?>>(Resource.Loading)
-    val generatedUserState: StateFlow<Resource<User?>> = _generatedUserState
+    // ВАЖНО: Изменил тип на nullable для возможности сброса
+    private val _generatedUserState = MutableStateFlow<Resource<User?>?>(null)
+    val generatedUserState: StateFlow<Resource<User?>?> = _generatedUserState
 
     fun deleteUser(user: User) {
         viewModelScope.launch {
@@ -43,6 +44,11 @@ class ListUsersViewModel(
         viewModelScope.launch {
             saveUserUseCase(user)
         }
+    }
+
+    // Сброс состояния генерации пользователя
+    fun clearGeneratedUserState() {
+        _generatedUserState.value = null
     }
 
     fun generateAndSaveUser() {

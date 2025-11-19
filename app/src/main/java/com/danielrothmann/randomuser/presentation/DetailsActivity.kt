@@ -1,14 +1,19 @@
 package com.danielrothmann.randomuser.presentation
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import coil.load
 import com.danielrothmann.randomuser.databinding.ActivityDetailsBinding
 import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import org.koin.core.parameter.parametersOf
 
@@ -19,10 +24,16 @@ class DetailsActivity : AppCompatActivity() {
         parametersOf(intent.getStringExtra("USER_UUID") ?: "")
     }
 
+    private var isNewUser = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityDetailsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // Проверяем, является ли это новым пользователем
+        isNewUser = intent.getBooleanExtra("IS_NEW_USER", false)
+        Log.d("DetailsActivity", "onCreate: isNewUser = $isNewUser")
 
         setupToolbar()
         setupTabs()
@@ -30,9 +41,28 @@ class DetailsActivity : AppCompatActivity() {
     }
 
     private fun setupToolbar() {
-        binding.toolbar.setNavigationOnClickListener {
-            onBackPressed()
+        binding.toolbar.apply {
+            setNavigationOnClickListener {
+                Log.d("DetailsActivity", "Back button clicked")
+                handleBackNavigation()
+            }
+            title = ""
+            subtitle = ""
         }
+
+        binding.collapsingToolbar.title = ""
+        binding.collapsingToolbar.isTitleEnabled = false
+    }
+
+    private fun handleBackNavigation() {
+        if (isNewUser) {
+            // Если это новый пользователь, отправляем результат
+            Log.d("DetailsActivity", "Setting result for new user")
+            setResult(Activity.RESULT_OK, Intent().apply {
+                putExtra("USER_ADDED", true)
+            })
+        }
+        finish()
     }
 
     private fun setupTabs() {
@@ -52,33 +82,39 @@ class DetailsActivity : AppCompatActivity() {
         })
     }
 
-
     private fun setupObservers() {
-        lifecycleScope.launchWhenStarted {
-            viewModel.isLoading.collectLatest { isLoading ->
-                binding.progressBar.isVisible = isLoading
-                binding.nestedScrollView.isVisible = !isLoading
-                binding.tvError.isVisible = false
-            }
-        }
-
-        lifecycleScope.launchWhenStarted {
-            viewModel.userState.collectLatest { user ->
-                user?.let {
-                    displayUserData(it)
-                    binding.nestedScrollView.isVisible = true
-                    binding.tvError.isVisible = false
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Наблюдаем за состоянием загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.progressBar.isVisible = isLoading
+                        binding.nestedScrollView.isVisible = !isLoading
+                        binding.tvError.isVisible = false
+                    }
                 }
-            }
-        }
 
-        lifecycleScope.launchWhenStarted {
-            viewModel.errorState.collectLatest { error ->
-                error?.let {
-                    binding.tvError.isVisible = true
-                    binding.tvError.text = error
-                    binding.nestedScrollView.isVisible = false
-                    binding.progressBar.isVisible = false
+                // Наблюдаем за данными пользователя
+                launch {
+                    viewModel.userState.collectLatest { user ->
+                        user?.let {
+                            displayUserData(it)
+                            binding.nestedScrollView.isVisible = true
+                            binding.tvError.isVisible = false
+                        }
+                    }
+                }
+
+                // Наблюдаем за ошибками
+                launch {
+                    viewModel.errorState.collectLatest { error ->
+                        error?.let {
+                            binding.tvError.isVisible = true
+                            binding.tvError.text = error
+                            binding.nestedScrollView.isVisible = false
+                            binding.progressBar.isVisible = false
+                        }
+                    }
                 }
             }
         }

@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.danielrothmann.randomuser.databinding.ActivityListUsersBinding
 import com.danielrothmann.randomuser.domain.model.Resource
@@ -12,6 +13,7 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class ListUsersActivity : AppCompatActivity() {
@@ -40,7 +42,7 @@ class ListUsersActivity : AppCompatActivity() {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        onBackPressedDispatcher.onBackPressed()
         return true
     }
 
@@ -78,39 +80,47 @@ class ListUsersActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
-        lifecycleScope.launchWhenStarted {
-            viewModel.users.collectLatest { users ->
-                adapter.submitList(users)
-                binding.recyclerView.isVisible = users.isNotEmpty()
-                // Здесь можно добавить TextView для пустого состояния
-                // binding.emptyState.isVisible = users.isEmpty()
-            }
-        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Список пользователей
+                launch {
+                    viewModel.users.collectLatest { users ->
+                        adapter.submitList(users)
+                        binding.recyclerView.isVisible = users.isNotEmpty()
+                    }
+                }
 
-        lifecycleScope.launchWhenStarted {
-            viewModel.isLoading.collectLatest { isLoading ->
-                binding.btnAddUser.isEnabled = !isLoading
-                // Можно добавить ProgressBar на кнопку
-            }
-        }
+                // Состояние загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.btnAddUser.isEnabled = !isLoading
+                    }
+                }
 
-        lifecycleScope.launchWhenStarted {
-            viewModel.generatedUserState.collectLatest { resource ->
-                when (resource) {
-                    is Resource.Success -> {
-                        resource.data?.let { user ->
-                            // Переходим к деталям сгенерированного пользователя
-                            val intent = Intent(this@ListUsersActivity, DetailsActivity::class.java).apply {
-                                putExtra("USER_UUID", user.uuid)
+                // Состояние генерации пользователя
+                launch {
+                    viewModel.generatedUserState.collectLatest { resource ->
+                        when (resource) {
+                            is Resource.Success -> {
+                                resource.data?.let { user ->
+                                    val intent = Intent(this@ListUsersActivity, DetailsActivity::class.java).apply {
+                                        putExtra("USER_UUID", user.uuid)
+                                    }
+                                    viewModel.clearGeneratedUserState()
+                                    startActivity(intent)
+                                }
                             }
-                            startActivity(intent)
+                            is Resource.Error -> {
+                                Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
+                                viewModel.clearGeneratedUserState()
+                            }
+                            is Resource.Loading -> {
+                                // Loading state
+                            }
+                            null -> {
+                                // Состояние сброшено
+                            }
                         }
-                    }
-                    is Resource.Error -> {
-                        Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
-                    }
-                    is Resource.Loading -> {
-                        // Loading state
                     }
                 }
             }

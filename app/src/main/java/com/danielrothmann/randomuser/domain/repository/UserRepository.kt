@@ -1,7 +1,5 @@
 package com.danielrothmann.randomuser.domain.repository
 
-
-
 import com.danielrothmann.randomuser.domain.model.Resource
 import com.danielrothmann.randomuser.domain.model.User
 import kotlinx.coroutines.flow.Flow

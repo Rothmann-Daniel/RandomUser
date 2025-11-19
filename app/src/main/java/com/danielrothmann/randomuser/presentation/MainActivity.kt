@@ -5,11 +5,14 @@ import android.os.Bundle
 import android.widget.ArrayAdapter
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.danielrothmann.randomuser.databinding.ActivityMainBinding
 import com.danielrothmann.randomuser.domain.model.Resource
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : AppCompatActivity() {
@@ -71,36 +74,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
-        lifecycleScope.launchWhenStarted {
-            viewModel.isLoading.collectLatest { isLoading ->
-                binding.btnGenerateUser.isEnabled = !isLoading
-                binding.btnGenerateUser.text = if (isLoading) "Generating..." else "Generate"
-            }
-        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Состояние загрузки
+                launch {
+                    viewModel.isLoading.collectLatest { isLoading ->
+                        binding.btnGenerateUser.isEnabled = !isLoading
+                        binding.btnGenerateUser.text = if (isLoading) "Generating..." else "Generate"
+                    }
+                }
 
-        lifecycleScope.launchWhenStarted {
-            viewModel.hasUsers.collectLatest { hasUsers ->
-                binding.btnViewList.isVisible = hasUsers
-            }
-        }
+                // Наличие пользователей
+                launch {
+                    viewModel.hasUsers.collectLatest { hasUsers ->
+                        binding.btnViewList.isVisible = hasUsers
+                    }
+                }
 
-        lifecycleScope.launchWhenStarted {
-            viewModel.generatedUserState.collectLatest { resource ->
-                when (resource) {
-                    is Resource.Success -> {
-                        resource.data?.let { user ->
-                            // Переходим к деталям сгенерированного пользователя
-                            val intent = Intent(this@MainActivity, DetailsActivity::class.java).apply {
-                                putExtra("USER_UUID", user.uuid)
+                // Состояние генерации пользователя
+                launch {
+                    viewModel.generatedUserState.collectLatest { resource ->
+                        when (resource) {
+                            is Resource.Success -> {
+                                resource.data?.let { user ->
+                                    val intent = Intent(this@MainActivity, DetailsActivity::class.java).apply {
+                                        putExtra("USER_UUID", user.uuid)
+                                    }
+                                    viewModel.clearGeneratedUserState()
+                                    startActivity(intent)
+                                }
                             }
-                            startActivity(intent)
+                            is Resource.Error -> {
+                                Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
+                                viewModel.clearGeneratedUserState()
+                            }
+                            is Resource.Loading -> {
+                                // Loading state уже обрабатывается в isLoading flow
+                            }
+                            null -> {
+                                // Состояние сброшено
+                            }
                         }
-                    }
-                    is Resource.Error -> {
-                        Snackbar.make(binding.root, "Error: ${resource.message}", Snackbar.LENGTH_LONG).show()
-                    }
-                    is Resource.Loading -> {
-                        // Loading state уже обрабатывается в isLoading flow
                     }
                 }
             }
