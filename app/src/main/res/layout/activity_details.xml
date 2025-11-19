@@ -73,7 +73,29 @@
 
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- Progress Bar - перемещаем на верхний уровень -->
+    <com.google.android.material.progressindicator.CircularProgressIndicator
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- TextView для ошибки - перемещаем на верхний уровень -->
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:padding="16dp"
+        android:textColor="@color/accent"
+        android:textSize="16sp"
+        android:visibility="gone"
+        tools:text="User not found" />
+
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/nestedScrollView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"

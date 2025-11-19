@@ -2,12 +2,15 @@ package com.danielrothmann.randomuser.presentation
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
-import androidx.appcompat.app.AlertDialog
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.danielrothmann.randomuser.R
 import com.danielrothmann.randomuser.databinding.ActivityListUsersBinding
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
+import com.danielrothmann.randomuser.presentation.adapters.UsersAdapter
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class ListUsersActivity : AppCompatActivity() {
@@ -28,14 +31,14 @@ class ListUsersActivity : AppCompatActivity() {
 
     private fun setupRecyclerView() {
         adapter = UsersAdapter(
-            onItemClick = { user ->
+            onUserClick = { user ->
                 val intent = Intent(this, DetailsActivity::class.java).apply {
-                    putExtra("USER", user)
+                    putExtra("USER_UUID", user.uuid)
                 }
                 startActivity(intent)
             },
-            onMoreClick = { user ->
-                showDeleteDialog(user)
+            onUserDelete = { user ->
+                viewModel.deleteUser(user)
             }
         )
 
@@ -46,26 +49,23 @@ class ListUsersActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
-        viewModel.users.observe(this) { users ->
-            adapter.submitList(users)
+        lifecycleScope.launchWhenStarted {
+            viewModel.users.collectLatest { users ->
+                adapter.submitList(users)
+
+                // Показываем пустое состояние если нет пользователей
+                binding.recyclerView.isVisible = users.isNotEmpty()
+                // Здесь можно добавить TextView для пустого состояния
+                // binding.emptyState.isVisible = users.isEmpty()
+            }
         }
     }
 
     private fun setupClickListeners() {
         binding.btnAddUser.setOnClickListener {
             val intent = Intent(this, MainActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             startActivity(intent)
         }
-    }
-
-    private fun showDeleteDialog(user: com.danielrothmann.randomuser.domain.model.User) {
-        AlertDialog.Builder(this)
-            .setTitle("Delete User")
-            .setMessage("Are you sure you want to delete ${user.fullName}?")
-            .setPositiveButton("Delete") { _, _ ->
-                viewModel.deleteUser(user)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 }

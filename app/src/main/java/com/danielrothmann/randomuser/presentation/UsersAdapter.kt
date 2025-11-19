@@ -1,19 +1,19 @@
-package com.danielrothmann.randomuser.presentation
+// presentation/adapters/UsersAdapter.kt
+package com.danielrothmann.randomuser.presentation.adapters
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
-import com.danielrothmann.randomuser.R
+import coil.load
 import com.danielrothmann.randomuser.databinding.ItemListUsersBinding
 import com.danielrothmann.randomuser.domain.model.User
 
 class UsersAdapter(
-    private val onItemClick: (User) -> Unit,
-    private val onMoreClick: (User) -> Unit
-) : ListAdapter<User, UsersAdapter.UserViewHolder>(UserDiffCallback()) {
+    private val onUserClick: (User) -> Unit,
+    private val onUserDelete: (User) -> Unit
+) : ListAdapter<User, UsersAdapter.UserViewHolder>(UserDiffCallback) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): UserViewHolder {
         val binding = ItemListUsersBinding.inflate(
@@ -25,46 +25,43 @@ class UsersAdapter(
     }
 
     override fun onBindViewHolder(holder: UserViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        val user = getItem(position)
+        holder.bind(user)
     }
 
     inner class UserViewHolder(
         private val binding: ItemListUsersBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(user: User) {
-            binding.apply {
-                tvUserItemFirstName.text = user.fullName.split(" ").getOrNull(1) ?: ""
-                tvUserItemLastName.text = user.fullName.split(" ").lastOrNull() ?: ""
-                tvPhone.text = user.phone
-                tvCountry.text = user.country
-
-                Glide.with(itemView.context)
-                    .load(user.pictureUrl)
-                    .placeholder(R.drawable.placeholder)
-                    .into(imageUserItem)
-
-                // Загрузка флага страны (опционально)
-                val countryCode = user.nationality.lowercase()
-                val flagUrl = "https://flagcdn.com/w80/$countryCode.png"
-
-                Glide.with(itemView.context)
-                    .load(flagUrl)
-                    .placeholder(R.drawable.placeholder)
-                    .into(imageCountry)
-
-                root.setOnClickListener {
-                    onItemClick(user)
-                }
-
-                imageMore.setOnClickListener {
-                    onMoreClick(user)
-                }
+        init {
+            binding.root.setOnClickListener {
+                val user = getItem(adapterPosition)
+                onUserClick(user)
             }
+
+            binding.imageMore.setOnClickListener {
+                val user = getItem(adapterPosition)
+                onUserDelete(user)
+            }
+        }
+
+        fun bind(user: User) {
+            binding.imageUserItem.load(user.pictureUrl) {
+                crossfade(true)
+                placeholder(com.danielrothmann.randomuser.R.drawable.placeholder)
+            }
+
+            binding.tvUserItemFirstName.text = user.fullName.split(" ").getOrNull(1) ?: ""
+            binding.tvUserItemLastName.text = user.fullName.split(" ").lastOrNull() ?: ""
+            binding.tvPhone.text = user.phone
+            binding.tvCountry.text = user.country
+
+            // Загрузка флага страны можно реализовать через другую библиотеку
+             binding.imageCountry.load("https://flagcdn.com/w320/${user.nationality.toLowerCase()}.png")
         }
     }
 
-    class UserDiffCallback : DiffUtil.ItemCallback<User>() {
+    object UserDiffCallback : DiffUtil.ItemCallback<User>() {
         override fun areItemsTheSame(oldItem: User, newItem: User): Boolean {
             return oldItem.uuid == newItem.uuid
         }
